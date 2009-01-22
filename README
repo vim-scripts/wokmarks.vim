@@ -1,0 +1,59 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=2522
+
+Lets you set and toggle a mark on a line without specifying which mark to use exactly.  wokmarks will choose an unused mark from a pool of allowed marks.  The script is quite verbose: you will get info which mark was set, removed or jumped to.
+
+
+Usage: (default keys)
+
+tm
+set pool mark for current line (if no local mark exists)
+
+tt
+toggle pool mark for current line
+
+tk
+tj
+jump to the [count]th local mark above/below the cursor position (like [' and ]' which are less verbose).
+Without count, the search for marks wraps around the buffer boundaries.
+
+tl
+list local marks
+
+tD
+remove all pool marks from the buffer or pool marks in range
+
+"t" actually is a built-in command; see below if you want to map other keys in the vimrc.
+Local marks = pool marks + user marks.  User marks will not be set or removed by the script.
+
+v0.3: The toggle hook will be executed whenever wokmarks adds or removes marks.  Purpose is to be able to update external marks highlighting etc.  Add a command to the hook:
+
+     :autocmd User WokmarksChange   :MyMarksHighlightingUpdate
+
+This must not be wrapped in an augroup -- this way you can define the autocmd before wokmarks is loaded.
+
+
+Customization:
+
+:let g:wokmarks_pool = "abcdfghijklmnopqrtuvwxyz"
+(string)
+Pool of allowed marks.  The marks s and e excluded here (user marks), they are commonly used for start and end positions.
+
+:let g:wokmarks_do_maps = 1
+(number)
+Values:
+0    don't map any keys
+1    map the default keys
+2    map Ctrl-F2 to toggle a mark, and  F2 / Shift-F2 to jump to the next or previous mark
+
+The default keys are being mapped this way:
+:map tk <Plug>PrevMarkWok
+:map tj <Plug>NextMarkWok
+:nmap tt <Plug>ToggleMarkWok
+:nmap tm <Plug>SetMarkWok
+:map tD <Plug>KillMarksWok
+:nnoremap <silent> tl :marks abcdefghijklmnopqrstuvwxyz<CR>
+
+
+Credits must go to vimscript #66
+
+2010 Mar 28
