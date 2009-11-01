@@ -1,10 +1,10 @@
 " Vim plugin - local marks usage more similar to other editors
 " File:		wokmarks.vim
 " Created:	2009 Jan 18
-" Last Change:	2009 Jan 20
-" Rev Days:     2
+" Last Change:	2009 Nov 01
+" Rev Days:     8
 " Author:	Andy Wokula <anwoku@yahoo.de>
-" Version:	0.1
+" Version:	0.2
 " Vim Version:	7.0+
 "
 " Description:
@@ -17,7 +17,11 @@
 "	CTRL-F2	    toggle a mark on/off for current line
 "	F2	    jump to next mark below
 "	SHIFT-F2    jump to previous mark above
-"   This script uses other keys, see below.
+"
+"   You can enable (only) the above keys with
+"	:let g:wokmarks_do_maps = 2
+"
+"   in your vimrc.  But the default keys are the following:
 
 " Usage: key	action
 "   tm		set pool mark for current line (if no local mark exists)
@@ -47,10 +51,17 @@
 "   NextMarkWok
 " - extract parts to autoload script?
 " - check out what it needs to make Wokmarks_GetMark() really useful
+" v0.1
 " + jumping with count
 " + <Plug>maps - allow for the F2 mappings
 " + make SetMark() usable in scripts
 " + init folklore, cpo
+" v0.2
+" + tj tk set the ' mark, to allow jumping back with CTRL-O
+" + added Omap mode for <Plug>NextMarkWok, <Plug>PrevMarkWok
+" + let Wokmarks_GetMark() also accept ".", "$", etc.
+" + if g:wokmarks_do_maps == 2, then F2 maps are used (Tom Link)
+" + prev/next mark searches wrap around (Tom Link)
 
 " Script Init Folklore:
 if exists("loaded_wokmarks")
@@ -81,14 +92,16 @@ endif
 " <Plug>-maps for use in the vimrc, needs g:wokmarks_do_maps = 0 then
 nnoremap <silent> <Plug>PrevMarkWok   :<C-U>call<sid>PrevMarkWok(0)<CR>
 vnoremap <silent> <Plug>PrevMarkWok   :<C-U>call<sid>PrevMarkWok(1)<CR>
+onoremap	  <Plug>PrevMarkWok   ['
 nnoremap <silent> <Plug>NextMarkWok   :<C-U>call<sid>NextMarkWok(0)<CR>
 vnoremap <silent> <Plug>NextMarkWok   :<C-U>call<sid>NextMarkWok(1)<CR>
+onoremap	  <Plug>NextMarkWok   ]'
 nnoremap <silent> <Plug>ToggleMarkWok :<C-U>call<sid>ToggleMarkWok()<CR>
 nnoremap <silent> <Plug>SetMarkWok    :<C-U>call<sid>SetMarkWok()<CR>
 nnoremap <silent> <Plug>KillMarksWok  :call<sid>KillMarksWok(0)<CR>
 vnoremap <silent> <Plug>KillMarksWok  :call<sid>KillMarksWok(1)<CR>
 
-if g:wokmarks_do_maps
+if g:wokmarks_do_maps == 1
     map tk <Plug>PrevMarkWok
     sunmap tk
     map tj <Plug>NextMarkWok
@@ -97,8 +110,15 @@ if g:wokmarks_do_maps
     nmap tm <Plug>SetMarkWok
     map tD <Plug>KillMarksWok
     sunmap tD
-    nnoremap <silent> tl :marks abcdefghijklmnopqrstuvwxyz<CR>
+    nnoremap <silent> tl :WokListMarks<CR>
+elseif g:wokmarks_do_maps == 2
+    map <F2> <Plug>NextMarkWok
+    map <S-F2> <Plug>PrevMarkWok
+    nmap <C-F2> <Plug>ToggleMarkWok
+    " nmap <F2> <Plug>SetMarkWok
 endif
+command! -range=% WokKillMarks <line1>,<line2>call <sid>KillMarksWok(1)
+command! WokListMarks marks abcdefghijklmnopqrstuvwxyz
 
 " toggle pool mark for current line
 func! <sid>ToggleMarkWok()
@@ -132,8 +152,9 @@ func! <sid>ToggleMarkWok()
 endfunc
 
 " still experimental regarding its usefulness:
-func! Wokmarks_GetMark(lnum)
-    return <sid>SetMarkWok(a:lnum)
+func! Wokmarks_GetMark(lnum_expr)
+    let lnum = a:lnum_expr==0 ? line(a:lnum_expr) : a:lnum_expr
+    return <sid>SetMarkWok(lnum)
 endfunc
 
 " set a pool mark (not if a mark exists)
@@ -179,19 +200,27 @@ func! <sid>PrevMarkWok(vmode)
 	normal! gv
     endif
     let curlnum = line(".")
+    let cnt = v:count
     let lnrlist = map(copy(s:localmarks), "line(\"'\".v:val)")
-    let abolnrlist = map(lnrlist, 'v:val >= curlnum ? 0 : v:val')
+    let abolnrlist = map(copy(lnrlist), 'v:val >= curlnum ? 0 : v:val')
     let prevlnum = max(abolnrlist)
-    if prevlnum == 0
+    if prevlnum >= 1
+	if cnt > 0
+	    let lnrsdesc = sort(filter(abolnrlist, 'v:val>0'), "s:NcmpD")
+	    let prevlnum = lnrsdesc[cnt>len(lnrsdesc) ? -1 : cnt-1]
+	endif
+    elseif cnt == 0
+	let prevlnum = max(lnrlist)
+	if prevlnum == 0
+	    echo "No local marks"
+	    return
+	endif
+    else
 	echo "No local mark above cursor position"
 	return
     endif
-    let cnt = v:count
-    if cnt > 0
-	let lnrsdesc = sort(filter(copy(abolnrlist), 'v:val>0'), "s:NcmpD")
-	let prevlnum = lnrsdesc[cnt>len(lnrsdesc) ? -1 : cnt-1]
-    endif
     let mark = s:localmarks[index(lnrlist, prevlnum)]
+    mark '
     exec "'". mark
     if !a:vmode || !&showmode
 	redraw
@@ -206,20 +235,30 @@ func! <sid>NextMarkWok(vmode)
 	normal! gv
     endif
     let curlnum = line(".")
+    let cnt = v:count
     let lnrlist = map(copy(s:localmarks), "line(\"'\".v:val)")
-    let bellnrlist = filter(copy(lnrlist),'v:val>curlnum')
+    let bellnrlist = filter(copy(lnrlist), 'v:val>curlnum')
     " hehe we must exclude the zeros
     let nextlnum = min(bellnrlist)
-    if nextlnum == 0
+    if nextlnum >= 1
+	if cnt > 0
+	    let lnrsasc = sort(bellnrlist, "s:NcmpA")
+	    let nextlnum = lnrsasc[cnt>len(lnrsasc) ? -1 : cnt-1]
+	endif
+    elseif cnt == 0
+	let marklnums = filter(copy(lnrlist), 'v:val>0')
+	if empty(marklnums)
+	    echo "No local marks"
+	    return
+	    " don't depend on min([]) == 0
+	endif
+	let nextlnum = min(marklnums)
+    else
 	echo "No local mark below cursor position"
 	return
     endif
-    let cnt = v:count
-    if cnt > 0
-	let lnrsasc = sort(bellnrlist, "s:NcmpA")
-	let nextlnum = lnrsasc[cnt>len(lnrsasc) ? -1 : cnt-1]
-    endif
     let mark = s:localmarks[index(lnrlist, nextlnum)]
+    mark '
     exec "'". mark
     if !a:vmode || !&showmode
 	redraw
@@ -228,17 +267,16 @@ func! <sid>NextMarkWok(vmode)
 endfunc
 
 " kill marks (pool marks only) from the buffer
-func! <sid>KillMarksWok(vmode) range
+func! <sid>KillMarksWok(userange) range
     let marklist = copy(s:poolmarks)
     call filter(marklist, "line(\"'\".v:val) > 0")
-    if a:vmode || v:count > 0
+    if a:userange || v:count > 0
 	" kill marks within range of lines
 	call filter(marklist, "line(\"'\".v:val) >= a:firstline"
 	    \. " && line(\"'\".v:val) <= a:lastline")
     endif
     if empty(marklist)
 	echo "No marks killed"
-	" echo "Sh**! Not even one f***ing mark to be killed"
     else
 	exec "delmarks" join(marklist)
 	echo "Marks killed:" join(marklist)
