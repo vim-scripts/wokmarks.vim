@@ -1,10 +1,10 @@
 " Vim plugin - local marks usage more similar to other editors
 " File:		wokmarks.vim
 " Created:	2009 Jan 18
-" Last Change:	2009 Nov 01
-" Rev Days:     8
+" Last Change:	2010 Mar 28
+" Rev Days:     12
 " Author:	Andy Wokula <anwoku@yahoo.de>
-" Version:	0.2
+" Version:	0.3
 " Vim Version:	7.0+
 "
 " Description:
@@ -62,6 +62,9 @@
 " + let Wokmarks_GetMark() also accept ".", "$", etc.
 " + if g:wokmarks_do_maps == 2, then F2 maps are used (Tom Link)
 " + prev/next mark searches wrap around (Tom Link)
+" v0.3
+" + added toggle hook (:au User WokmarksChange) (Tom Link)
+" + added Wokmarks_GetLocalMarks()
 
 " Script Init Folklore:
 if exists("loaded_wokmarks")
@@ -129,8 +132,10 @@ func! <sid>ToggleMarkWok()
     let idx = index(poolnrlist, curlnum)
     if idx >= 0
 	" line has a pool mark, turn it off
-	exec "delmarks" s:poolmarks[idx]
-	echo "Mark" s:poolmarks[idx] "removed"
+	let mark = s:poolmarks[idx]
+	exec "delmarks" mark
+	echo "Mark" mark "removed"
+	call s:ExecToggleHook(0, [mark])
 	return
     endif
     let lnrlist = map(copy(s:usermarks), "line(\"'\".v:val)")
@@ -147,8 +152,10 @@ func! <sid>ToggleMarkWok()
 	return
 	" maybe maintain a history, and use the oldest mark?
     endif
-    exec "mark" s:poolmarks[newidx] 
-    echo "Mark" s:poolmarks[newidx] "set"
+    let mark = s:poolmarks[newidx]
+    exec "mark" mark 
+    echo "Mark" mark "set"
+    call s:ExecToggleHook(1, [mark])
 endfunc
 
 " still experimental regarding its usefulness:
@@ -189,8 +196,10 @@ func! <sid>SetMarkWok(...)
     if non_interact
 	return [s:poolmarks[newidx], "fresh"]
     else
-	exec "mark" s:poolmarks[newidx] 
-	echo "Mark" s:poolmarks[newidx] "set"
+	let mark = s:poolmarks[newidx]
+	exec "mark" mark
+	echo "Mark" mark "set"
+	call s:ExecToggleHook(1, [mark])
     endif
 endfunc
 
@@ -280,6 +289,7 @@ func! <sid>KillMarksWok(userange) range
     else
 	exec "delmarks" join(marklist)
 	echo "Marks killed:" join(marklist)
+	call s:ExecToggleHook(0, marklist)
     endif
 endfunc
 
@@ -301,6 +311,10 @@ func! Wokmarks_UpdMarkLists()
     endfor
 endfunc
 
+func! Wokmarks_GetLocalMarks()
+    return filter(copy(s:localmarks), "line(\"'\".v:val)>=1")
+endfunc
+
 " check if {mark} is a pool mark (return "P") or a user mark (return "U");
 " return "" for unknown mark (e.g. a global mark)
 func! Wokmarks_Type(mark)
@@ -314,6 +328,18 @@ endfunc
 
 func! s:NcmpD(i1, i2)
     return a:i2 - a:i1
+endfunc
+
+func! s:ExecToggleHook(added, marks)
+    " {added}	indicates that the argument marks have been added (1) or
+    "		removed (0)
+    " {marks}	(list) list of marks
+    try
+	let b:wokmarks_changed = [a:added, a:marks]
+	sil doautocmd User WokmarksChange
+    finally
+	unlet b:wokmarks_changed
+    endtry
 endfunc
 
 " Credits: original script _vim_wok_visualcpp.vim
