@@ -1,10 +1,10 @@
 " Vim plugin - local marks usage more similar to other editors
 " File:		wokmarks.vim
 " Created:	2009 Jan 18
-" Last Change:	2010 Mar 28
-" Rev Days:     12
+" Last Change:	2010 Aug 17
+" Rev Days:     14
 " Author:	Andy Wokula <anwoku@yahoo.de>
-" Version:	0.3
+" Version:	0.3.1
 " Vim Version:	7.0+
 "
 " Description:
@@ -65,6 +65,8 @@
 " v0.3
 " + added toggle hook (:au User WokmarksChange) (Tom Link)
 " + added Wokmarks_GetLocalMarks()
+" v0.3.1
+" + :doautocmd executes the modelines (bug in Vim?); reset 'modeline'
 
 " Script Init Folklore:
 if exists("loaded_wokmarks")
@@ -335,10 +337,13 @@ func! s:ExecToggleHook(added, marks)
     "		removed (0)
     " {marks}	(list) list of marks
     try
+	let sav_ml = &ml
+	setlocal nomodeline
 	let b:wokmarks_changed = [a:added, a:marks]
 	sil doautocmd User WokmarksChange
     finally
-	unlet b:wokmarks_changed
+	unlet! b:wokmarks_changed
+	let &l:ml = sav_ml
     endtry
 endfunc
 
